@@ -1,0 +1,62 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow users to read their own data and other users' emails
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+      
+      // Allow users to read collaborator documents where they are listed
+      match /projects/{projectId}/collaborators/{collaboratorEmail} {
+        allow read: if request.auth != null && 
+          collaboratorEmail == request.auth.token.email.replace('.', '_').replace('@', '_at_');
+        allow write: if request.auth != null && 
+          (request.auth.uid == userId || 
+           collaboratorEmail == request.auth.token.email.replace('.', '_').replace('@', '_at_'));
+      }
+      
+      // Allow project access for both owner and collaborators
+      match /projects/{projectId} {
+        allow read: if request.auth != null && 
+          (request.auth.uid == userId || 
+           exists(/databases/$(database)/documents/users/$(userId)/projects/$(projectId)/collaborators/$(request.auth.token.email.replace('.', '_').replace('@', '_at_')));
+        allow write: if request.auth != null && 
+          (request.auth.uid == userId || 
+           exists(/databases/$(database)/documents/users/$(userId)/projects/$(projectId)/collaborators/$(request.auth.token.email.replace('.', '_').replace('@', '_at_'))));
+        
+        match /progress/{document=**} {
+          allow read, write: if request.auth != null && 
+            (request.auth.uid == userId || 
+             exists(/databases/$(database)/documents/users/$(userId)/projects/$(projectId)/collaborators/$(request.auth.token.email.replace('.', '_').replace('@', '_at_'))));
+        }
+        
+        match /commits/{document=**} {
+          allow read, write: if request.auth != null && 
+            (request.auth.uid == userId || 
+             exists(/databases/$(database)/documents/users/$(userId)/projects/$(projectId)/collaborators/$(request.auth.token.email.replace('.', '_').replace('@', '_at_'))));
+        }
+        
+        match /objects/{document=**} {
+          allow read, write: if request.auth != null && 
+            (request.auth.uid == userId || 
+             exists(/databases/$(database)/documents/users/$(userId)/projects/$(projectId)/collaborators/$(request.auth.token.email.replace('.', '_').replace('@', '_at_'))));
+        }
+      }
+    }
+
+    // Rules for the global invitations collection
+    match /invitations/{inviteId} {
+      allow list: if request.auth != null;
+      allow read: if request.auth != null && 
+        (request.auth.token.email == resource.data.invited_email ||
+         request.auth.uid == resource.data.owner_user_id);
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.owner_user_id;
+      allow update: if request.auth != null && 
+        (request.auth.uid == resource.data.owner_user_id || 
+         request.auth.token.email == resource.data.invited_email);
+      allow delete: if request.auth != null && 
+        request.auth.uid == resource.data.owner_user_id;
+    }
+  }
+} 

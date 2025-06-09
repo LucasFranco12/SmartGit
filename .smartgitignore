@@ -1,0 +1,6 @@
+Cargo.lock
+*.log
+target/
+.gitignore
+Cargo.toml
+watch.pid
